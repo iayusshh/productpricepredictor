@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Price Predictor — Ayush Anand</title>
+<style>
+  /* ── Reset & Base ─────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --orange: #FF9900;
+    --orange-dim: rgba(255,153,0,0.15);
+    --orange-glow: rgba(255,153,0,0.4);
+    --navy: #0a0e1a;
+    --card: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+    --text: #e8eaf0;
+    --muted: rgba(232,234,240,0.5);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+    background: var(--navy);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* ── Custom Cursor ────────────────────────────────── */
+  #cursor {
+    position: fixed; top: 0; left: 0;
+    width: 12px; height: 12px;
+    background: var(--orange);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+    transition: width 0.2s, height 0.2s, background 0.2s;
+    mix-blend-mode: screen;
+  }
+  #cursor-ring {
+    position: fixed; top: 0; left: 0;
+    width: 36px; height: 36px;
+    border: 1.5px solid var(--orange-glow);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+    transform: translate(-50%, -50%);
+    transition: transform 0.12s ease-out, width 0.3s, height 0.3s, border-color 0.3s;
+  }
+  #cursor-trail {
+    position: fixed; top: 0; left: 0;
+    pointer-events: none;
+    z-index: 9997;
+  }
+
+  body:hover #cursor { opacity: 1; }
+
+  /* ── Canvas Background ────────────────────────────── */
+  #bg-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ── Layout ───────────────────────────────────────── */
+  .page {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 24px 100px;
+  }
+
+  /* ── Header ───────────────────────────────────────── */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--orange-dim);
+    border: 1px solid rgba(255,153,0,0.3);
+    border-radius: 100px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--orange);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .badge-dot {
+    width: 6px; height: 6px;
+    background: var(--orange);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  h1 {
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 16px;
+  }
+  h1 span {
+    background: linear-gradient(135deg, #FF9900, #FFD700, #FF6B35);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* ── Stats Bar ────────────────────────────────────── */
+  .stats {
+    display: flex;
+    gap: 32px;
+    margin-bottom: 56px;
+    animation: fadeUp 0.8s 0.1s ease both;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-num {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--orange);
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }
+  .stat-divider {
+    width: 1px;
+    background: var(--border);
+    align-self: stretch;
+  }
+
+  /* ── Main Card ────────────────────────────────────── */
+  .card {
+    width: 100%;
+    max-width: 720px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px;
+    backdrop-filter: blur(20px);
+    animation: fadeUp 0.8s 0.2s ease both;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--orange), transparent);
+  }
+
+  .input-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 140px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  textarea:focus {
+    border-color: rgba(255,153,0,0.5);
+    box-shadow: 0 0 0 3px rgba(255,153,0,0.08);
+  }
+  textarea::placeholder { color: rgba(232,234,240,0.25); }
+
+  /* ── Quick Fill Chips ─────────────────────────────── */
+  .chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    margin-bottom: 24px;
+  }
+  .chip {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .chip:hover {
+    background: var(--orange-dim);
+    border-color: rgba(255,153,0,0.4);
+    color: var(--orange);
+  }
+
+  /* ── Button ───────────────────────────────────────── */
+  .btn {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #FF9900, #FF6B35);
+    border: none;
+    border-radius: 14px;
+    color: #0a0e1a;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: none;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.02em;
+  }
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(255,153,0,0.35);
+  }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn .btn-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .btn-shimmer {
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: shimmer 2.5s infinite;
+  }
+
+  /* ── Results ──────────────────────────────────────── */
+  #results {
+    margin-top: 32px;
+    display: none;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .price-hero {
+    text-align: center;
+    padding: 32px;
+    background: linear-gradient(135deg, rgba(255,153,0,0.08), rgba(255,107,53,0.05));
+    border: 1px solid rgba(255,153,0,0.2);
+    border-radius: 20px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .price-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(255,153,0,0.1), transparent 70%);
+    pointer-events: none;
+  }
+  .price-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--orange);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 8px;
+  }
+  .price-value {
+    font-size: clamp(48px, 10vw, 72px);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    background: linear-gradient(135deg, #FF9900, #FFD700);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+  .price-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  /* ── Model Bars ───────────────────────────────────── */
+  .models-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 16px;
+  }
+
+  .model-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    opacity: 0;
+    transform: translateX(-10px);
+    animation: slideIn 0.4s ease forwards;
+  }
+  .model-name {
+    font-size: 13px;
+    color: var(--muted);
+    width: 170px;
+    flex-shrink: 0;
+    text-transform: capitalize;
+  }
+  .model-name span {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background: var(--orange);
+  }
+  .bar-wrap {
+    flex: 1;
+    height: 8px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    background: linear-gradient(90deg, #FF9900, #FFD700);
+    width: 0%;
+    transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .model-price {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    width: 70px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ── Confidence ───────────────────────────────────── */
+  .confidence {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-top: 20px;
+    font-size: 13px;
+  }
+  .conf-label { color: var(--muted); }
+  .conf-value {
+    font-weight: 700;
+    color: #4ade80;
+  }
+
+  /* ── Footer ───────────────────────────────────────── */
+  footer {
+    margin-top: 60px;
+    text-align: center;
+    font-size: 13px;
+    color: rgba(232,234,240,0.25);
+    animation: fadeUp 0.8s 0.4s ease both;
+  }
+  footer strong { color: var(--orange); }
+
+  /* ── Loading ──────────────────────────────────────── */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(10,14,26,0.3);
+    border-top-color: #0a0e1a;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  /* ── Animations ───────────────────────────────────── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideIn {
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.85); }
+  }
+  @keyframes shimmer {
+    to { left: 200%; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-8px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Custom Cursor -->
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+<canvas id="cursor-trail"></canvas>
+
+<!-- Particle Background -->
+<canvas id="bg-canvas"></canvas>
+
+<div class="page">
+
+  <!-- Header -->
+  <header>
+    <div class="badge"><span class="badge-dot"></span>ML Model Live</div>
+    <h1>Predict <span>Product Price</span><br>with AI</h1>
+    <p class="subtitle">Enter any Amazon product description and get an instant price prediction powered by 5 machine learning models.</p>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-num">75K</div>
+      <div class="stat-label">Training Samples</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-num">5</div>
+      <div class="stat-label">ML Models</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-num">400</div>
+      <div class="stat-label">Features</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-num">BERT</div>
+      <div class="stat-label">Text Encoding</div>
+    </div>
+  </div>
+
+  <!-- Main Card -->
+  <div class="card">
+    <label class="input-label">Product Description</label>
+    <textarea id="input" placeholder="Item Name: Nescafe Classic Instant Coffee, 200g&#10;Value: 200.0&#10;Unit: Grams"></textarea>
+
+    <!-- Quick Fill Examples -->
+    <div class="chips">
+      <span class="chip" onclick="fillExample(0)">☕ Coffee</span>
+      <span class="chip" onclick="fillExample(1)">🥜 Peanut Butter</span>
+      <span class="chip" onclick="fillExample(2)">💊 Vitamins</span>
+      <span class="chip" onclick="fillExample(3)">🎮 Headphones</span>
+      <span class="chip" onclick="fillExample(4)">🍫 Chocolate</span>
+    </div>
+
+    <button class="btn" id="predictBtn" onclick="predict()">
+      <div class="btn-shimmer"></div>
+      <div class="btn-inner">
+        <svg id="btn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+        </svg>
+        <div class="spinner" id="spinner"></div>
+        <span id="btn-text">Predict Price</span>
+      </div>
+    </button>
+
+    <!-- Results -->
+    <div id="results">
+      <div class="price-hero">
+        <div class="price-label">Ensemble Prediction</div>
+        <div class="price-value" id="price-display">$0.00</div>
+        <div class="price-sub" id="price-sub">Weighted average across all models</div>
+      </div>
+
+      <div class="models-title">Model Breakdown</div>
+      <div id="model-bars"></div>
+
+      <div class="confidence">
+        <span class="conf-label">Model Agreement</span>
+        <span class="conf-value" id="agreement">—</span>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Built by <strong>Ayush Anand</strong> · Amazon ML Challenge · 5 models · BERT + Text features
+  </footer>
+</div>
+
+<script>
+// ── Examples ────────────────────────────────────────────
+const EXAMPLES = [
+  `Item Name: Nescafe Classic Instant Coffee, 200g\nValue: 200.0\nUnit: Grams`,
+  `Item Name: Jif Creamy Peanut Butter, 40 oz (Pack of 2)\nValue: 80.0\nUnit: Oz`,
+  `Item Name: Nature Made Vitamin D3 2000 IU, 250 Softgels\nValue: 250.0\nUnit: Count`,
+  `Item Name: Sony WH-1000XM5 Wireless Noise Cancelling Headphones\nValue: 1.0\nUnit: Count`,
+  `Item Name: Lindt Excellence 70% Cocoa Dark Chocolate Bar, 3.5 oz (Pack of 12)\nValue: 42.0\nUnit: Oz`,
+];
+
+function fillExample(i) {
+  document.getElementById('input').value = EXAMPLES[i];
+  document.getElementById('input').focus();
+}
+
+// ── Predict ──────────────────────────────────────────────
+const MODEL_COLORS = {
+  xgboost: '#FF9900',
+  lightgbm: '#FFD700',
+  neural_network: '#FF6B35',
+  ridge_regression: '#FFA040',
+  gradient_boosting: '#FFBB55',
+};
+
+async function predict() {
+  const text = document.getElementById('input').value.trim();
+  if (!text) {
+    shake(document.getElementById('input'));
+    return;
+  }
+
+  const btn = document.getElementById('predictBtn');
+  const spinner = document.getElementById('spinner');
+  const icon = document.getElementById('btn-icon');
+  const btnText = document.getElementById('btn-text');
+
+  btn.disabled = true;
+  spinner.style.display = 'block';
+  icon.style.display = 'none';
+  btnText.textContent = 'Analyzing...';
+
+  try {
+    const res = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: text })
+    });
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error);
+    showResults(data);
+  } catch (e) {
+    alert('Error: ' + e.message + '\n\nMake sure the Flask server is running.');
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    icon.style.display = 'block';
+    btnText.textContent = 'Predict Price';
+  }
+}
+
+function showResults(data) {
+  const resultsEl = document.getElementById('results');
+  resultsEl.style.display = 'block';
+
+  // Animate price counter
+  animatePrice(data.ensemble);
+
+  // Model bars
+  const barsEl = document.getElementById('model-bars');
+  barsEl.innerHTML = '';
+  const prices = Object.values(data.models);
+  const maxPrice = Math.max(...prices);
+  const minPrice = Math.min(...prices);
+
+  Object.entries(data.models)
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([name, price], i) => {
+      const pct = maxPrice > 0 ? (price / maxPrice) * 100 : 50;
+      const color = MODEL_COLORS[name] || '#FF9900';
+      const row = document.createElement('div');
+      row.className = 'model-row';
+      row.style.animationDelay = `${i * 0.07}s`;
+      row.innerHTML = `
+        <div class="model-name"><span style="background:${color}"></span>${name.replace(/_/g,' ')}</div>
+        <div class="bar-wrap"><div class="bar-fill" style="background:linear-gradient(90deg,${color},${color}aa)" data-pct="${pct}"></div></div>
+        <div class="model-price">$${price.toFixed(2)}</div>
+      `;
+      barsEl.appendChild(row);
+      // Animate bars after render
+      setTimeout(() => {
+        row.querySelector('.bar-fill').style.width = pct + '%';
+      }, 100 + i * 70);
+    });
+
+  // Agreement metric
+  const spread = maxPrice - minPrice;
+  const agreement = spread < 5 ? 'High' : spread < 20 ? 'Medium' : 'Low';
+  const agreeColor = spread < 5 ? '#4ade80' : spread < 20 ? '#facc15' : '#f87171';
+  const agreeEl = document.getElementById('agreement');
+  agreeEl.textContent = `${agreement} (±$${spread.toFixed(2)} spread)`;
+  agreeEl.style.color = agreeColor;
+
+  // Scroll to results
+  setTimeout(() => resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+}
+
+function animatePrice(target) {
+  const el = document.getElementById('price-display');
+  const duration = 1200;
+  const start = performance.now();
+  const startVal = parseFloat(el.textContent.replace('$','')) || 0;
+
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 4);
+    const current = startVal + (target - startVal) * ease;
+    el.textContent = '$' + current.toFixed(2);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function shake(el) {
+  el.style.animation = 'none';
+  el.style.borderColor = '#f87171';
+  setTimeout(() => { el.style.borderColor = ''; }, 600);
+}
+
+// Enter key shortcut
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') predict();
+});
+
+// ── Custom Cursor ────────────────────────────────────────
+const cursor = document.getElementById('cursor');
+const ring = document.getElementById('cursor-ring');
+const trailCanvas = document.getElementById('cursor-trail');
+const tctx = trailCanvas.getContext('2d');
+
+trailCanvas.width = window.innerWidth;
+trailCanvas.height = window.innerHeight;
+window.addEventListener('resize', () => {
+  trailCanvas.width = window.innerWidth;
+  trailCanvas.height = window.innerHeight;
+});
+
+let mx = -100, my = -100;
+let rx = -100, ry = -100;
+const trail = [];
+const MAX_TRAIL = 18;
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cursor.style.left = mx + 'px';
+  cursor.style.top = my + 'px';
+  trail.push({ x: mx, y: my, age: 0 });
+  if (trail.length > MAX_TRAIL) trail.shift();
+});
+
+document.querySelectorAll('button, .chip, textarea').forEach(el => {
+  el.addEventListener('mouseenter', () => {
+    cursor.style.width = '20px';
+    cursor.style.height = '20px';
+    ring.style.width = '52px';
+    ring.style.height = '52px';
+    ring.style.borderColor = 'rgba(255,153,0,0.8)';
+  });
+  el.addEventListener('mouseleave', () => {
+    cursor.style.width = '12px';
+    cursor.style.height = '12px';
+    ring.style.width = '36px';
+    ring.style.height = '36px';
+    ring.style.borderColor = 'rgba(255,153,0,0.4)';
+  });
+});
+
+function animateCursor() {
+  // Smooth ring follow
+  rx += (mx - rx) * 0.12;
+  ry += (my - ry) * 0.12;
+  ring.style.left = rx + 'px';
+  ring.style.top = ry + 'px';
+
+  // Draw trail
+  tctx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+  for (let i = 1; i < trail.length; i++) {
+    const t = i / trail.length;
+    const alpha = t * 0.35;
+    const radius = t * 5;
+    tctx.beginPath();
+    tctx.arc(trail[i].x, trail[i].y, radius, 0, Math.PI * 2);
+    tctx.fillStyle = `rgba(255,153,0,${alpha})`;
+    tctx.fill();
+  }
+
+  requestAnimationFrame(animateCursor);
+}
+animateCursor();
+
+// ── Particle Background ──────────────────────────────────
+const bgCanvas = document.getElementById('bg-canvas');
+const bctx = bgCanvas.getContext('2d');
+bgCanvas.width = window.innerWidth;
+bgCanvas.height = window.innerHeight;
+window.addEventListener('resize', () => {
+  bgCanvas.width = window.innerWidth;
+  bgCanvas.height = window.innerHeight;
+});
+
+const PARTICLE_COUNT = 60;
+const particles = Array.from({ length: PARTICLE_COUNT }, () => ({
+  x: Math.random() * bgCanvas.width,
+  y: Math.random() * bgCanvas.height,
+  r: Math.random() * 1.5 + 0.3,
+  vx: (Math.random() - 0.5) * 0.3,
+  vy: (Math.random() - 0.5) * 0.3,
+  alpha: Math.random() * 0.4 + 0.1,
+}));
+
+function drawParticles() {
+  bctx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+  // Draw connections
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 120) {
+        bctx.beginPath();
+        bctx.moveTo(particles[i].x, particles[i].y);
+        bctx.lineTo(particles[j].x, particles[j].y);
+        bctx.strokeStyle = `rgba(255,153,0,${0.06 * (1 - dist/120)})`;
+        bctx.lineWidth = 0.5;
+        bctx.stroke();
+      }
+    }
+  }
+
+  // Draw particles
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < 0) p.x = bgCanvas.width;
+    if (p.x > bgCanvas.width) p.x = 0;
+    if (p.y < 0) p.y = bgCanvas.height;
+    if (p.y > bgCanvas.height) p.y = 0;
+
+    bctx.beginPath();
+    bctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    bctx.fillStyle = `rgba(255,153,0,${p.alpha})`;
+    bctx.fill();
+  });
+
+  // Mouse attraction
+  particles.forEach(p => {
+    const dx = mx - p.x, dy = my - p.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 150) {
+      p.vx += (dx / dist) * 0.015;
+      p.vy += (dy / dist) * 0.015;
+      // Dampen
+      p.vx *= 0.96;
+      p.vy *= 0.96;
+    }
+  });
+
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+</script>
+</body>
+</html>

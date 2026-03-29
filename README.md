@@ -1,347 +1,224 @@
-# ML Product Pricing Challenge 2025
+# Product Price Predictor
 
-A comprehensive machine learning solution for product price prediction using multimodal features (text and images). This solution processes 75k training samples to build models that predict prices for 75k test samples, evaluated using Symmetric Mean Absolute Percentage Error (SMAPE).
+**Author: Ayush Anand**
+Amazon ML Challenge — Predict product prices from text descriptions using an ensemble of 5 machine learning models + BERT embeddings.
 
-## 🚀 Quick Start - Complete Reproduction
+---
 
-### Option 1: Using pip (Recommended)
+## What This Project Does
 
+Given a product description like:
+```
+Item Name: Nescafe Classic Instant Coffee, 200g
+Value: 200.0
+Unit: Grams
+```
+The model predicts its price — e.g. **$9.23**
+
+It does this by:
+1. Extracting 16 hand-crafted text features (pack size, weight, brand signals, etc.)
+2. Encoding the description using **BERT** (all-MiniLM-L6-v2) → 384 semantic features
+3. Feeding 400 total features into **5 ML models**
+4. Combining predictions into a **weighted ensemble** (better models get higher weight)
+
+---
+
+## Models Used
+
+| Model | Type | Notes |
+|-------|------|-------|
+| XGBoost | Gradient Boosting | GPU-accelerated, best performer |
+| LightGBM | Gradient Boosting | Fast, handles large datasets |
+| Neural Network | MLP (512→256→128→1) | Deep learning baseline |
+| Ridge Regression | Linear | Fast, good regularization |
+| Gradient Boosting | sklearn GBR | Slower but robust |
+
+---
+
+## Project Structure
+
+```
+student_resource/
+├── train_models.py          # Main training script (run this to retrain)
+├── app.py                   # Flask web server for real-time prediction UI
+├── predict.py               # Command-line predictor
+├── scaler.pkl               # Fitted StandardScaler (from training)
+│
+├── dataset/
+│   ├── train.csv            # 75,000 training samples (not in GitHub)
+│   ├── test.csv             # 75,000 test samples (not in GitHub)
+│   └── sample_test.csv      # Small sample for testing
+│
+├── models/
+│   ├── xgboost_model.pkl
+│   ├── lightgbm_model.pkl
+│   ├── neural_network_model.pkl
+│   ├── ridge_regression_model.pkl
+│   └── gradient_boosting_model.pkl
+│
+├── notebooks/
+│   └── colab_full_pipeline.ipynb   # Full training on Google Colab (GPU)
+│
+├── ui/
+│   └── index.html           # Web UI (served by app.py)
+│
+├── src/                     # Source pipeline modules
+└── tests/                   # Unit tests
+```
+
+---
+
+## How to Run
+
+### Option 1 — Web UI (recommended)
+
+Start the server:
 ```bash
-# 1. Clone/extract the project
-cd ml-product-pricing
+cd student_resource
+python app.py
+```
+Open **http://localhost:5050** in your browser.
 
-# 2. Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# OR on Windows: venv\Scripts\activate
+Type any product description → click **Predict Price** → see results from all 5 models instantly.
 
-# 3. Install exact dependencies
+> **First run** downloads the BERT model (~90MB). Takes ~30 seconds.
+
+---
+
+### Option 2 — Command Line
+
+Single prediction:
+```bash
+python predict.py --text "Item Name: Nescafe Coffee 200g
+Value: 200.0
+Unit: Grams"
+```
+
+Interactive mode (type multiple products):
+```bash
+python predict.py
+```
+
+---
+
+### Option 3 — Retrain the Models
+
+**Locally (text only, ~40 min):**
+```bash
+python train_models.py
+```
+
+**Locally with BERT (~2 hrs on CPU):**
+```bash
+pip install sentence-transformers
+python train_models.py --bert
+```
+
+**On Google Colab with GPU (~30 min, recommended):**
+1. Open `notebooks/colab_full_pipeline.ipynb` in [colab.research.google.com](https://colab.research.google.com)
+2. Set runtime to **T4 GPU** (Runtime → Change runtime type)
+3. Upload `dataset/train.csv` and `dataset/test.csv`
+4. Run all cells
+5. Download `test_out.csv` and `trained_models.zip`
+
+**Quick test on small sample:**
+```bash
+python train_models.py --sample 2000
+```
+
+---
+
+## Setup
+
+### Requirements
+```bash
+pip install numpy pandas scikit-learn xgboost lightgbm flask flask-cors sentence-transformers tqdm
+```
+
+Or using the requirements file:
+```bash
 pip install -r requirements.txt
-
-# 4. Run the complete pipeline
-./run_all.sh
 ```
 
-### Option 2: Using conda
+### Python version
+Python 3.10+ required.
 
-```bash
-# 1. Create environment from file
-conda env create -f environment.yml
+---
 
-# 2. Activate environment
-conda activate ml-product-pricing
-
-# 3. Run the complete pipeline
-./run_all.sh
-```
-
-## 📋 Complete Pipeline Reproduction
-
-### Step-by-Step Manual Execution
-
-```bash
-# 1. Environment Setup
-source venv/bin/activate
-
-# 2. Data Preprocessing
-python src/main.py --stage preprocessing
-# Processes dataset/train.csv and dataset/test.csv
-# Validates schema, normalizes prices, handles missing data
-# Downloads and caches product images with retry logic
-
-# 3. Feature Engineering
-python src/main.py --stage feature_engineering
-# Extracts text features using BERT embeddings
-# Processes images with CNN models (ResNet/EfficientNet)
-# Combines multimodal features with fusion strategies
-
-# 4. Model Training
-python src/main.py --stage training
-# Trains ensemble of models (Random Forest, XGBoost, LightGBM)
-# Performs 5-fold cross-validation with SMAPE evaluation
-# Saves model checkpoints and training logs
-
-# 5. Prediction Generation
-python src/main.py --stage prediction
-# Generates predictions for test.csv
-# Applies prediction clamping (>=0.01)
-# Validates output format and completeness
-
-# 6. Evaluation and Validation
-python src/main.py --stage evaluation
-# Calculates SMAPE with unit tests
-# Generates evaluation reports with visualizations
-# Validates submission compliance
-```
-
-## 🏗️ Project Structure
+## How It Works — Step by Step
 
 ```
-ml-product-pricing/
-├── dataset/                     # Competition data
-│   ├── train.csv               # Training data (75k samples)
-│   ├── test.csv                # Test data (75k samples)
-│   └── sample_test_out.csv     # Sample output format
-├── src/                        # Source code
-│   ├── data_processing/        # Data loading and preprocessing
-│   ├── features/               # Text and image feature engineering
-│   ├── models/                 # Model training and ensemble
-│   ├── prediction/             # Prediction generation
-│   ├── evaluation/             # SMAPE calculation and validation
-│   ├── infrastructure/         # Logging and resource management
-│   ├── compliance/             # License tracking and validation
-│   └── main.py                 # Main pipeline orchestrator
-├── models/                     # Trained model checkpoints
-├── embeddings/                 # Cached embeddings with metadata
-├── images/                     # Downloaded product images
-├── logs/                       # Training logs and CV results
-├── cache/                      # Processing cache and manifests
-├── tests/                      # Unit tests (≥80% coverage)
-├── notebooks/                  # EDA and baseline experiments
-├── deliverables/               # Final submission files
-├── compliance/                 # Compliance reports and logs
-├── requirements.txt            # Exact dependency versions
-├── environment.yml             # Conda environment specification
-├── run_all.sh                  # Complete pipeline script
-├── README.md                   # This file
-└── test_out.csv               # Final predictions (generated)
+train.csv (75,000 products)
+        │
+        ▼
+┌─────────────────────────────────┐
+│   Feature Extraction            │
+│   • 16 regex text features      │  ← pack size, brand, weight, units...
+│   • 384 BERT embeddings         │  ← semantic meaning of description
+│   Total: 400 features/product   │
+└─────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────┐
+│   Log-transform price target    │  ← log(1+price) compresses skew
+│   price $0.13–$2,796 → 0–8.5   │
+└─────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────┐
+│   5-Fold Cross Validation       │  ← honest performance estimate
+│   Train on 4 folds, test on 1   │
+│   Rotate 5 times, average SMAPE │
+└─────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────┐
+│   Train 5 Models on full data   │
+│   XGBoost / LightGBM / NN /     │
+│   Ridge / GradientBoosting      │
+└─────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────┐
+│   Weighted Ensemble             │  ← weight = 1/SMAPE
+│   Better model → higher weight  │
+│   Predictions combined          │
+└─────────────────────────────────┘
+        │
+        ▼
+   test_out.csv (75,000 predictions)
 ```
 
-## 🔧 System Requirements
+---
 
-### Hardware Requirements
-- **Memory**: 16GB RAM minimum, 32GB recommended
-- **GPU**: NVIDIA GPU with 8GB+ VRAM (optional but recommended)
-- **Storage**: 50GB free space for images, embeddings, and models
-- **CPU**: Multi-core processor for parallel processing
+## Evaluation Metric
 
-### Software Requirements
-- **Python**: 3.10 or higher
-- **Operating System**: Linux, macOS, or Windows
-- **CUDA**: 11.8+ (if using GPU acceleration)
+**SMAPE** — Symmetric Mean Absolute Percentage Error:
 
-## 📊 Model Architecture and Configuration
-
-### Text Feature Engineering
-- **Embeddings**: sentence-transformers/all-MiniLM-L6-v2 (384 dimensions)
-- **Statistical Features**: 21 features (length, word count, readability)
-- **Categorical Features**: Brand detection (40+ brands), categories (12 types)
-- **IPQ Extraction**: Regex-based with >90% precision validation
-
-### Image Feature Engineering
-- **CNN Models**: ResNet-50, EfficientNet-B0 (pre-trained)
-- **Visual Features**: Deep features + color histograms + texture analysis
-- **Missing Image Handling**: Text-based fallback features
-- **Caching**: Versioned embeddings with integrity validation
-
-### Model Ensemble
-- **Base Models**: Random Forest, XGBoost, LightGBM, Neural Networks
-- **Ensemble Method**: Weighted averaging based on validation performance
-- **Cross-Validation**: 5-fold CV with stratified sampling
-- **Hyperparameter Tuning**: Bayesian optimization
-
-### Evaluation Metrics
-- **Primary**: SMAPE (Symmetric Mean Absolute Percentage Error)
-- **Secondary**: MAE, R², prediction distribution analysis
-- **Validation**: Holdout set mimicking test structure
-
-## 🧪 Testing and Validation
-
-### Unit Tests
-```bash
-# Run all unit tests with coverage
-pytest tests/ --cov=src --cov-report=html
-
-# Test specific components
-pytest tests/test_smape_calculator.py -v
-pytest tests/test_ipq_extractor.py -v
-pytest tests/test_image_processor.py -v
+```
+SMAPE = 100 × mean( |actual - predicted| / ((|actual| + |predicted|) / 2) )
 ```
 
-### Integration Tests
-```bash
-# Test complete pipeline
-python src/main.py --stage test --test-mode integration
+Lower is better. Current baseline: **~42–48% SMAPE** (text + BERT features).
 
-# Validate SMAPE calculation
-python -c "
-from src.evaluation import SMAPECalculator
-calc = SMAPECalculator()
-assert calc.test_smape_on_known_examples()
-print('✅ SMAPE validation passed')
-"
-```
+---
 
-### Performance Validation
-```bash
-# Check IPQ extraction precision
-python -c "
-from src.features import IPQExtractor
-extractor = IPQExtractor()
-precision = extractor.validate_ipq_extraction_precision()
-print(f'IPQ Precision: {precision:.3f} (Required: >0.90)')
-assert precision > 0.90
-"
-```
+## Training Data
 
-## 📈 Performance Benchmarks
+- **75,000 Amazon product listings** — mostly grocery, food & beverage items
+- Price range: $0.13 – $2,796
+- Average price: $23.65
+- Source: Amazon ML Challenge dataset
 
-### Feature Engineering Performance
-- **IPQ Extraction Precision**: 90.9% (exceeds 90% requirement)
-- **Text Processing Speed**: ~1000 samples/second
-- **Image Processing Speed**: ~100 images/second (with GPU)
-- **Feature Fusion Time**: ~50ms per sample
+> The model is most accurate for grocery/food products since that is what most training data contains.
 
-### Model Training Performance
-- **Training Time**: ~2-4 hours on GPU, ~8-12 hours on CPU
-- **Cross-Validation**: 5-fold CV with detailed SMAPE reporting
-- **Memory Usage**: Peak 12GB RAM, 6GB GPU memory
-- **Model Size**: ~500MB total for ensemble
+---
 
-### Prediction Performance
-- **Inference Speed**: 75k predictions in <10 minutes
-- **Memory Efficiency**: Batch processing for large datasets
-- **Prediction Range**: Clamped to ≥0.01 with documented rationale
+## Improving the Model
 
-## 🔒 Compliance and License Information
-
-### Data Sources
-- **Training Data**: Only competition-provided dataset/train.csv
-- **Test Data**: Only competition-provided dataset/test.csv
-- **Images**: Downloaded from provided URLs in dataset
-- **No External Data**: Compliance validated and logged
-
-### Model Licenses
-- **Pre-trained Models**: All models use MIT/Apache 2.0 licenses
-- **Dependencies**: All packages verified for license compliance
-- **Model Size Limit**: All models ≤8 billion parameters
-
-### Compliance Validation
-```bash
-# Run compliance check
-python src/compliance/example_usage.py
-
-# Generate compliance report
-python -c "
-from src.compliance import ComplianceManager
-manager = ComplianceManager()
-is_ready, issues = manager.validate_submission_readiness()
-print(f'Submission Ready: {is_ready}')
-if issues: print('Issues:', issues)
-"
-```
-
-## 📝 Hyperparameters and Configuration
-
-### Text Processing Configuration
-```python
-TEXT_CONFIG = {
-    'embedding_model': 'sentence-transformers/all-MiniLM-L6-v2',
-    'max_length': 512,
-    'batch_size': 32,
-    'ipq_precision_threshold': 0.90,
-    'unit_normalization': True
-}
-```
-
-### Image Processing Configuration
-```python
-IMAGE_CONFIG = {
-    'cnn_model': 'resnet50',
-    'image_size': (224, 224),
-    'batch_size': 16,
-    'retry_attempts': 3,
-    'cache_embeddings': True
-}
-```
-
-### Model Training Configuration
-```python
-TRAINING_CONFIG = {
-    'cv_folds': 5,
-    'random_seed': 42,
-    'ensemble_weights': 'validation_performance',
-    'hyperparameter_tuning': 'bayesian',
-    'early_stopping': True
-}
-```
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-1. **CUDA Out of Memory**
-   ```bash
-   # Reduce batch size in config
-   export CUDA_VISIBLE_DEVICES=0
-   python src/main.py --batch-size 8
-   ```
-
-2. **Missing Dependencies**
-   ```bash
-   # Reinstall with exact versions
-   pip install -r requirements.txt --force-reinstall
-   ```
-
-3. **Image Download Failures**
-   ```bash
-   # Check network and retry
-   python src/data_processing/image_downloader.py --retry-failed
-   ```
-
-4. **Memory Issues**
-   ```bash
-   # Enable memory-efficient processing
-   python src/main.py --memory-efficient --batch-size 16
-   ```
-
-### Performance Optimization
-
-1. **GPU Acceleration**
-   ```bash
-   # Verify GPU availability
-   python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
-   ```
-
-2. **Parallel Processing**
-   ```bash
-   # Set number of workers
-   export OMP_NUM_THREADS=8
-   python src/main.py --num-workers 8
-   ```
-
-## 📞 Support and Validation
-
-### Validation Commands
-```bash
-# Complete validation suite
-./validate_solution.sh
-
-# Individual validations
-python src/evaluation/smape_calculator.py --test
-python src/features/ipq_extractor.py --validate
-python src/compliance/compliance_manager.py --check
-```
-
-### Log Analysis
-```bash
-# View training logs
-tail -f logs/training_$(date +%Y%m%d).log
-
-# Check compliance logs
-cat compliance/compliance_summary.txt
-
-# Analyze performance metrics
-python -c "
-import json
-with open('logs/cv_results.json') as f:
-    results = json.load(f)
-print(f'Mean SMAPE: {results[\"mean_smape\"]:.4f} ± {results[\"std_smape\"]:.4f}')
-"
-```
-
-## 📄 License and Attribution
-
-This solution is developed for the ML Product Pricing Challenge 2025. All dependencies use MIT, Apache 2.0, or BSD licenses. See `compliance/license_report.json` for detailed license information.
-
-**Competition Compliance**: This solution uses only competition-provided data and open-source models within the specified constraints.
+| Improvement | Expected SMAPE drop | How |
+|------------|--------------------|----|
+| Image features (ResNet50 CNN) | -5 to -10% | Run Colab notebook with `--images` flag |
+| More training data | -5 to -15% | Add diverse product categories |
+| Hyperparameter tuning | -2 to -5% | Grid search on XGBoost/LightGBM |
+| CatBoost as 6th model | -1 to -3% | `pip install catboost` |
