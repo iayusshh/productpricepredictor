@@ -1,0 +1,51 @@
+# ── Python ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual environments ──────────────────────────────
+venv/
+env/
+.env/
+.venv/
+
+# ── Large dataset files ───────────────────────────────
+# Keep sample files (small), ignore full datasets
+dataset/train.csv
+dataset/test.csv
+
+# ── Large trained models (>100MB, GitHub limit) ───────
+# Small models (xgboost, lightgbm, ridge, nn, gbr) are kept
+models/random_forest_model.pkl
+models/extra_trees_model.pkl
+models/random_forest_simple.pkl
+
+# ── Generated output ──────────────────────────────────
+test_out.csv
+
+# ── Personal files ────────────────────────────────────
+Product_Price_Predictor_Report.pdf
+generate_report.py
+
+# ── IDE & OS ──────────────────────────────────────────
+.DS_Store
+.kiro/
+.vscode/
+*.swp
+*.swo
+.idea/
+
+# ── Jupyter checkpoints ───────────────────────────────
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# ── Misc ──────────────────────────────────────────────
+*.log
+*.db
+*.sqlite
+image_tracking.db
+embeddings/
+cache/
+logs/
