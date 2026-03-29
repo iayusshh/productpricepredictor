@@ -49,3 +49,6 @@ image_tracking.db
 embeddings/
 cache/
 logs/
+
+# Claude Code settings
+.claude/
