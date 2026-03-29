@@ -1,6 +1,5 @@
 """
 Product Price Predictor — Standalone Training Script
-Author: Ayush Anand
 
 What this script does:
   1. Loads train.csv / test.csv
@@ -497,7 +496,7 @@ def train_all_models(X_train: np.ndarray, y_train: np.ndarray,
 # Entry point
 # ---------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Product Price Predictor — Ayush Anand")
+    parser = argparse.ArgumentParser(description="Product Price Predictor")
     parser.add_argument("--images", action="store_true",
                         help="Include image features (requires GPU for speed)")
     parser.add_argument("--bert", action="store_true",

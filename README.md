@@ -1,7 +1,6 @@
 # Product Price Predictor
 
-**Author: Ayush Anand**
-Amazon ML Challenge — Predict product prices from text descriptions using an ensemble of 5 machine learning models + BERT embeddings.
+Predict product prices from text descriptions using an ensemble of 5 machine learning models + BERT embeddings.
 
 ---
 
@@ -208,7 +207,7 @@ Lower is better. Current baseline: **~42–48% SMAPE** (text + BERT features).
 - **75,000 Amazon product listings** — mostly grocery, food & beverage items
 - Price range: $0.13 – $2,796
 - Average price: $23.65
-- Source: Amazon ML Challenge dataset
+- Source: Competition dataset
 
 > The model is most accurate for grocery/food products since that is what most training data contains.
 

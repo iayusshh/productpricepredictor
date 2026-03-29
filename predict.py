@@ -1,6 +1,5 @@
 """
 Real-Time Product Price Predictor
-Author: Ayush Anand
 
 Usage:
   python predict.py                        # interactive mode (type description)
@@ -131,7 +130,7 @@ def predict_price(description):
 # ---------------------------------------------------------------------------
 def run_interactive():
     print("=" * 50)
-    print("  PRODUCT PRICE PREDICTOR — Ayush Anand")
+    print("  PRODUCT PRICE PREDICTOR")
     print("=" * 50)
     print("Type a product description below.")
     print("Format tip: 'Item Name: <name>\\nValue: <number>\\nUnit: <unit>'")

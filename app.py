@@ -1,6 +1,5 @@
 """
 Product Price Predictor — Web App
-Author: Ayush Anand
 """
 
 import pickle, re, warnings
