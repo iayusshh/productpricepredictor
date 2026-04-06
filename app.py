@@ -29,16 +29,34 @@ for name in MODEL_NAMES:
                 models[name] = pickle.load(f)
             print(f"  ✓ {name}")
         except Exception as e:
-            print(f"  ✗ {name} failed: {e}")
+            # Skip models that fail to load (e.g., neural network with torch issues)
+            print(f"  ⚠ {name} failed: {e}")
+            if name == "neural_network":
+                print("    (Neural network skipped - continuing with other models)")
+            continue
 
-with open("scaler.pkl", "rb") as f:
-    scaler = pickle.load(f)
+print(f"Loaded {len(models)} models successfully")
 
+# Load scaler
+try:
+    with open("scaler.pkl", "rb") as f:
+        scaler = pickle.load(f)
+    print("✓ Scaler loaded")
+except Exception as e:
+    print(f"✗ Scaler failed: {e}")
+    raise
+
+# Load BERT model
 print("Loading BERT model...")
-from sentence_transformers import SentenceTransformer
-bert_model = SentenceTransformer("all-MiniLM-L6-v2")
-print(f"  ✓ BERT ready\n")
-print("Server ready!")
+try:
+    from sentence_transformers import SentenceTransformer
+    bert_model = SentenceTransformer("all-MiniLM-L6-v2")
+    print("✓ BERT ready")
+except Exception as e:
+    print(f"✗ BERT failed: {e}")
+    raise
+
+print(f"\nServer ready! ({len(models)} models loaded)")
 
 
 # ---------------------------------------------------------------------------
@@ -98,10 +116,18 @@ def index():
 def health():
     """Health check endpoint"""
     try:
-        assert len(models) > 0, "No models loaded"
-        assert scaler is not None, "Scaler not loaded"
-        assert bert_model is not None, "BERT model not loaded"
-        return jsonify({"status": "ok", "models_loaded": len(models)}), 200
+        if len(models) == 0:
+            return jsonify({"status": "warning", "message": "No models loaded"}), 503
+        if scaler is None:
+            return jsonify({"status": "error", "message": "Scaler not loaded"}), 503
+        if bert_model is None:
+            return jsonify({"status": "error", "message": "BERT model not loaded"}), 503
+        
+        return jsonify({
+            "status": "ok", 
+            "models_loaded": len(models),
+            "models": list(models.keys())
+        }), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 503
 
@@ -149,7 +175,8 @@ def predict():
         return jsonify({
             "ensemble": ensemble,
             "models": preds,
-            "description": description[:80]
+            "description": description[:80],
+            "models_used": len(preds)
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
