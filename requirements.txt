@@ -1,5 +1,5 @@
 # Build tools (MUST be first)
-setuptools==68.2.2
+setuptools
 wheel
 
 # Web framework and deployment
@@ -7,22 +7,19 @@ flask==2.3.3
 flask-cors==4.0.0
 gunicorn==21.2.0
 
-# Core data processing (Python 3.13 compatible with wheels)
-numpy==2.0.0
-pandas==2.2.0
+# Core data processing (minimal, Python 3.13 compatible)
+numpy
+pandas
 
-# Machine learning (Python 3.13 compatible)
-scikit-learn==1.4.1
-scipy==1.12.0
-xgboost==2.0.3
-lightgbm==4.1.1
+# Machine learning (minimal)
+scikit-learn
+scipy
 
 # NLP and embeddings
-sentence-transformers==2.2.2
-transformers==4.35.2
-torch==2.2.2
+sentence-transformers
+transformers
 
 # Utilities
-requests==2.31.0
-Pillow==10.1.0
-python-dotenv==1.0.0
+requests
+Pillow
+python-dotenv
