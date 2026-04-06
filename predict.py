@@ -109,18 +109,26 @@ def predict_price(description):
     bert_feats = bert_model.encode([description], convert_to_numpy=True).astype(np.float32)
     X = np.hstack([text_feats, bert_feats])
 
+    # Validate features
+    if X.shape[1] != 400:
+        print(f"ERROR: Feature mismatch. Expected 400, got {X.shape[1]}")
+        return None, {}
+
     preds = {}
     for name, model in models.items():
         try:
             raw = model.predict(X)[0]
-            preds[name] = float(np.expm1(np.clip(raw, 0, 15)))
-        except Exception:
+            # Convert from log space to price
+            price = float(np.expm1(np.clip(raw, 0, 15)))
+            preds[name] = max(price, 0.01)  # Ensure positive
+        except Exception as e:
+            print(f"Model {name} failed: {e}")
             pass
 
     if not preds:
         return None, {}
 
-    # Weighted ensemble (equal weights since we don't have CV scores here)
+    # ✅ FIX: Ensemble averages in PRICE space (not log space)
     ensemble = np.mean(list(preds.values()))
     return ensemble, preds
 

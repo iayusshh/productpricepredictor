@@ -490,8 +490,13 @@ class WeightedAverageEnsemble:
         self.weights = self.weights / np.sum(self.weights)
     
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """Generate weighted average predictions"""
-        predictions = np.zeros((len(X), len(self.models)))
+        """
+        Generate weighted average predictions
+        
+        ✅ FIX: Predictions are averaged in PRICE space, not log space
+        Flow: log_pred → expm1 → price → weighted_average
+        """
+        predictions_log = np.zeros((len(X), len(self.models)))
         
         for i, (name, model) in enumerate(self.models.items()):
             try:
@@ -500,17 +505,26 @@ class WeightedAverageEnsemble:
                     model.eval()
                     with torch.no_grad():
                         X_tensor = torch.FloatTensor(X)
-                        pred = model(X_tensor).numpy().flatten()
+                        pred_log = model(X_tensor).numpy().flatten()
                 else:
-                    pred = model.predict(X)
+                    pred_log = model.predict(X)
                 
-                predictions[:, i] = pred
+                predictions_log[:, i] = pred_log
             except Exception as e:
-                # Use zeros for failed predictions
-                predictions[:, i] = 0
+                # Use median of other predictions as fallback
+                if i > 0:
+                    predictions_log[:, i] = np.median(predictions_log[:, :i], axis=1)
+                else:
+                    predictions_log[:, i] = 0
         
-        # Weighted average
-        weighted_predictions = np.dot(predictions, self.weights)
+        # ✅ FIX: Convert from log space to price space BEFORE averaging
+        predictions_price = np.expm1(np.clip(predictions_log, 0, 15))
+        
+        # Weighted average in PRICE space
+        weighted_predictions = np.dot(predictions_price, self.weights)
+        
+        # Ensure valid price range
+        weighted_predictions = np.clip(weighted_predictions, 0.01, None)
         
         return weighted_predictions
     

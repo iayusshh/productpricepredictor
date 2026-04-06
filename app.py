@@ -2,7 +2,7 @@
 Product Price Predictor — Web App
 """
 
-import pickle, re, warnings
+import pickle, re, warnings, os
 from pathlib import Path
 import numpy as np
 from flask import Flask, request, jsonify, send_from_directory
@@ -14,7 +14,7 @@ app = Flask(__name__, static_folder="ui")
 CORS(app)
 
 # ---------------------------------------------------------------------------
-# Load models + scaler + BERT
+# Load models + scaler + BERT (once at startup)
 # ---------------------------------------------------------------------------
 MODELS_DIR = Path("models")
 MODEL_NAMES = ["xgboost", "lightgbm", "neural_network", "ridge_regression", "gradient_boosting"]
@@ -24,9 +24,12 @@ models = {}
 for name in MODEL_NAMES:
     path = MODELS_DIR / f"{name}_model.pkl"
     if path.exists():
-        with open(path, "rb") as f:
-            models[name] = pickle.load(f)
-        print(f"  ✓ {name}")
+        try:
+            with open(path, "rb") as f:
+                models[name] = pickle.load(f)
+            print(f"  ✓ {name}")
+        except Exception as e:
+            print(f"  ✗ {name} failed: {e}")
 
 with open("scaler.pkl", "rb") as f:
     scaler = pickle.load(f)
@@ -35,7 +38,7 @@ print("Loading BERT model...")
 from sentence_transformers import SentenceTransformer
 bert_model = SentenceTransformer("all-MiniLM-L6-v2")
 print(f"  ✓ BERT ready\n")
-print("Server ready at http://localhost:5050")
+print("Server ready!")
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +94,17 @@ def extract_features(content):
 def index():
     return send_from_directory("ui", "index.html")
 
+@app.route("/health")
+def health():
+    """Health check endpoint"""
+    try:
+        assert len(models) > 0, "No models loaded"
+        assert scaler is not None, "Scaler not loaded"
+        assert bert_model is not None, "BERT model not loaded"
+        return jsonify({"status": "ok", "models_loaded": len(models)}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 503
+
 @app.route("/predict", methods=["POST"])
 def predict():
     data = request.json
@@ -99,18 +113,37 @@ def predict():
         return jsonify({"error": "No description provided"}), 400
 
     try:
+        # Extract and validate features
         text_feats = scaler.transform(extract_features(description))
+        
+        # Check feature shape
+        if text_feats.shape[1] != 16:
+            return jsonify({"error": f"Feature extraction failed: expected 16 features, got {text_feats.shape[1]}"}), 500
+        
+        # Get BERT embeddings
         bert_feats = bert_model.encode([description], convert_to_numpy=True).astype(np.float32)
         X = np.hstack([text_feats, bert_feats])
+        
+        # Validate combined features
+        if X.shape[1] != 400:
+            return jsonify({"error": f"Feature mismatch: expected 400 features, got {X.shape[1]}"}), 500
 
+        # Get predictions from each model
         preds = {}
         for name, model in models.items():
             try:
                 raw = model.predict(X)[0]
-                preds[name] = round(float(np.expm1(np.clip(raw, 0, 15))), 2)
-            except Exception:
-                pass  # skip models trained with different feature counts
+                # Convert from log space to price
+                price = float(np.expm1(np.clip(raw, 0, 15)))
+                preds[name] = round(max(price, 0.01), 2)
+            except Exception as e:
+                print(f"Model {name} failed: {e}")
+                pass  # Skip failed models
 
+        if not preds:
+            return jsonify({"error": "All models failed to predict"}), 500
+
+        # ✅ FIX: Ensemble averages in PRICE space
         ensemble = round(float(np.mean(list(preds.values()))), 2)
 
         return jsonify({
@@ -123,4 +156,5 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(debug=False, port=5050)
+    port = int(os.environ.get("PORT", 5050))
+    app.run(host="0.0.0.0", port=port, debug=False)

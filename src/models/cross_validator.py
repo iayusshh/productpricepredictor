@@ -71,8 +71,10 @@ class CrossValidator:
         """
         Perform k-fold cross-validation with comprehensive SMAPE calculation
         
+        CRITICAL FIX: Scaler is fit on TRAINING fold only (no data leakage)
+        
         Args:
-            X: Feature matrix
+            X: Feature matrix (UNSCALED)
             y: Target values
             model_trainer: ModelTrainer instance
             model_configs: Dictionary of model configurations
@@ -80,6 +82,8 @@ class CrossValidator:
         Returns:
             Dictionary containing CV results for each model
         """
+        from sklearn.preprocessing import StandardScaler
+        
         self.logger.info(f"Starting {self.config.model.cv_folds}-fold cross-validation")
         
         # Create stratified folds based on price quantiles if enabled
@@ -108,16 +112,21 @@ class CrossValidator:
                 X_train_fold, X_val_fold = X[train_idx], X[val_idx]
                 y_train_fold, y_val_fold = y[train_idx], y[val_idx]
                 
-                # Train model
-                model = model_trainer.train_model(X_train_fold, y_train_fold, model_config)
+                # ✅ FIX: Fit scaler on TRAINING fold only (prevents data leakage)
+                scaler_fold = StandardScaler()
+                X_train_fold_scaled = scaler_fold.fit_transform(X_train_fold)
+                X_val_fold_scaled = scaler_fold.transform(X_val_fold)
                 
-                # Validate model
+                # Train model on scaled training fold
+                model = model_trainer.train_model(X_train_fold_scaled, y_train_fold, model_config)
+                
+                # Validate model on scaled validation fold
                 fold_metrics = model_trainer.validate_model_with_detailed_metrics(
-                    model, X_val_fold, y_val_fold
+                    model, X_val_fold_scaled, y_val_fold
                 )
                 
                 # Store predictions for ensemble analysis
-                predictions = model_trainer._predict_model(model, X_val_fold)
+                predictions = model_trainer._predict_model(model, X_val_fold_scaled)
                 fold_predictions.extend(predictions)
                 fold_actuals.extend(y_val_fold)
                 

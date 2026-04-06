@@ -17,6 +17,11 @@ tokenizers==0.22.1
 safetensors==0.6.2
 huggingface-hub==0.35.3
 
+# Web framework and deployment
+flask==2.3.0
+flask-cors==4.0.0
+gunicorn==21.2.0
+
 # Image processing libraries
 Pillow==11.3.0
 opencv-python==4.12.0.88
