@@ -105,6 +105,68 @@ def extract_features(content):
     return np.array(feats, dtype=np.float32).reshape(1, -1)
 
 
+def _assess_input_quality(content, raw_feats):
+    """
+    Return (confidence: float 0-1, warning: str|None).
+    Sparse inputs — just a name with Value:1.0 and no other signals —
+    will always predict poorly, so we surface a warning rather than
+    silently returning a bad number.
+    """
+    text = content.lower()
+    value      = float(raw_feats[0, 0])
+    unit_score = float(raw_feats[0, 1])
+    pack_qty   = float(raw_feats[0, 2])
+    total_chars= float(raw_feats[0, 5])
+    brand_hit  = float(raw_feats[0, 8])
+
+    signals = 0
+    if value not in (0.0, 1.0):   signals += 2   # meaningful numeric value
+    if unit_score > 0:             signals += 1   # recognisable unit
+    if pack_qty > 1:               signals += 1   # pack quantity found
+    if brand_hit:                  signals += 1   # known brand
+    if total_chars > 120:          signals += 1   # rich description
+    if any(k in text for k in ["item name:", "entity name:", "group id:"]):
+        signals += 1  # structured catalog format
+
+    if signals <= 1:
+        return 0.30, (
+            "Very sparse input: only a product name with placeholder value detected. "
+            "Predictions on sparse catalog entries are unreliable — provide units, "
+            "quantity, and a real numeric value for better accuracy."
+        )
+    if signals <= 3:
+        return 0.60, (
+            "Limited catalog data: some signals missing (e.g. unit, quantity, or brand). "
+            "Prediction confidence is moderate."
+        )
+    return 0.90, None
+
+
+def _ensemble_with_outlier_guard(preds):
+    """
+    Median ensemble with NN outlier guard.
+    If the neural network prediction is >5x or <1/5 of the median of the
+    other models, it is clipped before being included — this prevents the
+    NN from dominating on sparse inputs where it tends to overshoot.
+    """
+    if len(preds) <= 1:
+        return round(float(np.median(list(preds.values()))), 2)
+
+    non_nn = {k: v for k, v in preds.items() if k != "neural_network"}
+    if non_nn and "neural_network" in preds:
+        others_med = float(np.median(list(non_nn.values())))
+        nn_val = preds["neural_network"]
+        if others_med > 0:
+            if nn_val > others_med * 5:
+                preds = dict(preds)
+                preds["neural_network"] = others_med * 3   # cap extreme upside
+            elif nn_val < others_med / 5:
+                preds = dict(preds)
+                preds["neural_network"] = others_med / 3   # floor extreme downside
+
+    return round(float(np.median(list(preds.values()))), 2)
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -139,22 +201,29 @@ def predict():
         return jsonify({"error": "No description provided"}), 400
 
     try:
-        # Extract and validate features
-        text_feats = scaler.transform(extract_features(description))
-        
+        # Extract raw features first (needed for quality assessment)
+        raw_feats = extract_features(description)
+
         # Check feature shape
-        if text_feats.shape[1] != 16:
-            return jsonify({"error": f"Feature extraction failed: expected 16 features, got {text_feats.shape[1]}"}), 500
-        
+        if raw_feats.shape[1] != 16:
+            return jsonify({"error": f"Feature extraction failed: expected 16 features, got {raw_feats.shape[1]}"}), 500
+
+        # Assess input quality before scaling (raw values are interpretable)
+        confidence, warning = _assess_input_quality(description, raw_feats)
+
+        text_feats = scaler.transform(raw_feats)
+
         # Get BERT embeddings
         bert_feats = bert_model.encode([description], convert_to_numpy=True).astype(np.float32)
         X = np.hstack([text_feats, bert_feats])
-        
+
         # Validate combined features
         if X.shape[1] != 400:
             return jsonify({"error": f"Feature mismatch: expected 400 features, got {X.shape[1]}"}), 500
 
         # Get predictions from each model
+        # All 5 models expect 400 features (16 text + 384 BERT).
+        # gradient_boosting was retrained on 400 features via retrain_gradient_boosting.py.
         preds = {}
         for name, model in models.items():
             try:
@@ -164,20 +233,26 @@ def predict():
                 preds[name] = round(max(price, 0.01), 2)
             except Exception as e:
                 print(f"Model {name} failed: {e}")
-                pass  # Skip failed models
 
         if not preds:
             return jsonify({"error": "All models failed to predict"}), 500
 
-        # ✅ FIX: Ensemble averages in PRICE space
-        ensemble = round(float(np.mean(list(preds.values()))), 2)
+        # Outlier-guarded median ensemble:
+        # - median is robust to a single bad model
+        # - NN is clipped if it deviates >5x from the rest (common on sparse inputs)
+        ensemble = _ensemble_with_outlier_guard(preds)
 
-        return jsonify({
+        response = {
             "ensemble": ensemble,
             "models": preds,
             "description": description[:80],
-            "models_used": len(preds)
-        })
+            "models_used": len(preds),
+            "confidence": confidence,
+        }
+        if warning:
+            response["warning"] = warning
+
+        return jsonify(response)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -399,6 +399,23 @@
     color: #4ade80;
   }
 
+  /* ── Warning Banner ──────────────────────────────── */
+  .warn-banner {
+    display: none;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 18px;
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 14px;
+    margin-top: 20px;
+    font-size: 13px;
+    color: #fbbf24;
+    line-height: 1.5;
+  }
+  .warn-banner.visible { display: flex; }
+  .warn-icon { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
+
   /* ── Footer ───────────────────────────────────────── */
   footer {
     margin-top: 60px;
@@ -525,11 +542,21 @@
         <span class="conf-label">Model Agreement</span>
         <span class="conf-value" id="agreement">—</span>
       </div>
+
+      <div class="confidence" style="margin-top:10px;">
+        <span class="conf-label">Input Quality</span>
+        <span class="conf-value" id="input-quality">—</span>
+      </div>
+
+      <div class="warn-banner" id="warn-banner">
+        <span class="warn-icon">⚠</span>
+        <span id="warn-text"></span>
+      </div>
     </div>
   </div>
 
   <footer>
-    5 models · BERT + Text features · Weighted Ensemble
+    5 models · BERT + Text features · Outlier-guarded Median Ensemble
   </footer>
 </div>
 
@@ -635,6 +662,33 @@ function showResults(data) {
   const agreeEl = document.getElementById('agreement');
   agreeEl.textContent = `${agreement} (±$${spread.toFixed(2)} spread)`;
   agreeEl.style.color = agreeColor;
+
+  // Input quality / confidence from backend
+  const conf = data.confidence ?? null;
+  const qualEl = document.getElementById('input-quality');
+  if (conf !== null) {
+    const pct = Math.round(conf * 100);
+    let qualLabel, qualColor;
+    if (conf >= 0.85)      { qualLabel = `High (${pct}%)`;   qualColor = '#4ade80'; }
+    else if (conf >= 0.50) { qualLabel = `Medium (${pct}%)`; qualColor = '#facc15'; }
+    else                   { qualLabel = `Low (${pct}%)`;    qualColor = '#f87171'; }
+    qualEl.textContent = qualLabel;
+    qualEl.style.color = qualColor;
+  } else {
+    qualEl.textContent = '—';
+    qualEl.style.color = '';
+  }
+
+  // Warning banner
+  const warnBanner = document.getElementById('warn-banner');
+  const warnText = document.getElementById('warn-text');
+  if (data.warning) {
+    warnText.textContent = data.warning;
+    warnBanner.classList.add('visible');
+  } else {
+    warnBanner.classList.remove('visible');
+    warnText.textContent = '';
+  }
 
   // Scroll to results
   setTimeout(() => resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
