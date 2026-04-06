@@ -1,21 +1,21 @@
-# Build tools (MUST be first)
+# Build tools
 setuptools
 wheel
 
-# Web framework and deployment
+# Web framework
 flask==2.3.3
 flask-cors==4.0.0
 gunicorn==21.2.0
 
-# Core data processing (minimal, Python 3.13 compatible)
+# Core ML (lightweight versions)
 numpy
 pandas
-
-# Machine learning (minimal)
 scikit-learn
 scipy
+xgboost
+lightgbm
 
-# NLP and embeddings
+# NLP (lightweight)
 sentence-transformers
 transformers
 
