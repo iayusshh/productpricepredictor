@@ -2,7 +2,15 @@
 Product Price Predictor — Web App
 """
 
-import pickle, re, warnings, os
+import os
+
+# Set HuggingFace/sentence-transformers cache to /tmp so it works on
+# read-only filesystems like Render's free tier.
+os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", "/tmp/sentence-transformers")
+os.environ.setdefault("TRANSFORMERS_CACHE", "/tmp/transformers")
+os.environ.setdefault("HF_HOME", "/tmp/huggingface")
+
+import pickle, re, warnings
 from pathlib import Path
 import numpy as np
 from flask import Flask, request, jsonify, send_from_directory

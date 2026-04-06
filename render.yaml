@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: product-price-predictor
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT --timeout 180 app:app
+    envVars:
+      - key: SENTENCE_TRANSFORMERS_HOME
+        value: /tmp/sentence-transformers
+      - key: TRANSFORMERS_CACHE
+        value: /tmp/transformers
+      - key: HF_HOME
+        value: /tmp/huggingface
+      - key: PYTHON_VERSION
+        value: 3.11.11
